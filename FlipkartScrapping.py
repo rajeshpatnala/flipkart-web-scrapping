@@ -13,7 +13,7 @@ from file_oper.write_to_file import writeToFile
 
 from mongo_operations.mongoOper import mongoOperations as mongo
 
-class FlipkartScp:
+class FlipkartScrap:
 
     def __init__(self):
         pass
@@ -69,7 +69,8 @@ class FlipkartScp:
         return content, reviews
 
 
-    def process(self, product):
+    def process(self, product, to_file, to_mongo, details):
+
         log.info("Processing Started")
         p_search_url = search_url(product)
         log.info(f"End Product URL - {p_search_url}")
@@ -86,9 +87,7 @@ class FlipkartScp:
             for url in prod_urls:
                 if self.__product_exists(url, products):
                     continue
-                log.info(f"Page Number - {next_page_number}")
-                log.info(f"No of products left - {no_of_products}")
-                log.info(url)
+                log.info(f"Current Page Number - {next_page_number} & No of products left - {no_of_products}")
                 no_of_products -=1 
                 if no_of_products < 0:
                     break
@@ -98,7 +97,8 @@ class FlipkartScp:
                 products.append(p_name)
 
                 #Inserting product detials to mongdb
-                #self.__insert_to_mongo(product_json)
+                if to_mongo:
+                    self.__insert_to_mongo(product_json)
 
                 max_comments = 3
                 reviews_list = []
@@ -106,9 +106,12 @@ class FlipkartScp:
                     content, reviews = self.processProductReviews(product_content, max_comments)
                     no_of_comments = len(reviews)
                     max_comments -= no_of_comments
-                    reviews_list.extend(reviews)
+                    
                     #Updating reviews to mongodb
-                    #self.__update_to_mongo(reviews)
+                    if to_mongo:
+                        self.__update_to_mongo(reviews)
+                    if to_file:
+                        reviews_list.extend(reviews)
                     if max_comments <= 0:
                         break
                     
@@ -117,13 +120,31 @@ class FlipkartScp:
                     comments_url = reviews_next_page(content)
                     if comments_url is None:
                         break
-                product_json['reviews']  = reviews_list
-                writeToFile(os.getcwd()+"/scrapping/data.dat", product_json)
+                if to_file:
+                    product_json['reviews']  = reviews_list
+                writeToFile(details['file'], product_json)
             if no_of_products < 0:
                     break
             next_page_number += 1
             p_search_url = next_page(p_search_url, next_page_number)
 
+    def to_file(self, product, file):
+        details = {"file" : file}
+        self.process(product, to_file=True, to_mongo=False, details=details)
+    
+    def to_mongo(self, product):
+        details = {
+            "username" : "username",
+            "password" : "password",
+            "db_name" : "db_name",
+            "collection" : "collection"
+
+        }
+        self.process(product, to_file=False, to_mongo=True, details=details)
+
+"""
+file = os.getcwd()+"/data.dat"
 log.info("Creating Scrap object")
-scpObj = FlipkartScp()
-scpObj.process("samsung")
+scpObj = FlipkartScrap()
+scpObj.to_file("samsung", file)
+"""
